@@ -5,6 +5,10 @@ import sys
 import csv
 import pandas as pd
 from datetime import datetime
+from collections import defaultdict
+from loguru import logger
+import statistics
+from operator import attrgetter
 
 CURR_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = join(CURR_DIR, 'data')
@@ -34,13 +38,13 @@ class Record:
     def __init__(self, csv_row_dict: dict):
         self.link = self._get_field_from_dict(csv_row_dict, '链接')
         self.floor_plan = self._get_field_from_dict(csv_row_dict, '户型')
-        self.selling_price = int(self._get_field_from_dict(csv_row_dict, '成交价格(万)'))
+        self.price = int(self._get_field_from_dict(csv_row_dict, '成交价格(万)'))
 
         self.selling_date = self._parse_date(self._get_field_from_dict(csv_row_dict, '成交日期'))
 
         listing_time = self._get_field_from_dict(csv_row_dict, '成交周期(天)', allow_empty=True)
         self.listing_time = int(listing_time) if listing_time is not None else None
-        self.selling_price_per_unit = float(self._get_field_from_dict(csv_row_dict, '单价'))
+        self.unit_price = float(self._get_field_from_dict(csv_row_dict, '单价'))
         self.area = float(self._get_field_from_dict(csv_row_dict, '面积(平米)'))
         self.window_direction = self._get_field_from_dict(csv_row_dict, '朝向')
         self.furnish = self._get_field_from_dict(csv_row_dict, '装修')
@@ -49,8 +53,8 @@ class Record:
             csv_row_dict, '楼型', allow_empty=True, empty_value='')
 
     @property
-    def selling_month(self) -> str:
-        return self.selling_date.strftime('%Y-%m')
+    def selling_month(self) -> datetime:
+        return datetime.strptime(self.selling_date.strftime('%Y-%m'), '%Y-%m')
 
     @staticmethod
     def _get_field_from_dict(d: dict, field_name: str, *, allow_empty: bool = False, empty_value=None) -> str:
@@ -81,13 +85,14 @@ class Record:
 _CSV_REST_KEY = '_additional_values'
 
 
-def main():
-    fig = go.Figure()
+def plot_monthly_price_fig():
+    monthly_price_fig = go.Figure()
+
     for file_full_name in os.listdir(DATA_DIR):
         file_full_path = join(DATA_DIR, file_full_name)
         community = _get_community_from_file_name(file_full_name)
 
-        records = []
+        records_by_month = defaultdict(list)
         with open(file_full_path, newline='') as f:
             reader = csv.DictReader(f, restkey=_CSV_REST_KEY)
 
@@ -101,18 +106,51 @@ def main():
                     raise RuntimeError(
                         f'Failed to parse record {record_id} from "{file_full_path}".') from e
 
-                records.append(record)
-
+                records_by_month[record.selling_month].append(record)
                 record_id += 1
 
-        # data_frame = pd.read_csv(join(DATA_DIR, file_full_name))
-        # line = go.Scatter(x=data_frame['成交日期'], y=data_frame['单价'], mode='lines+markers', name=community)
-        # fig.add_trace(line)
+        avg_unit_price_by_month = {}
+        for month, records in records_by_month.items():
+            valid_records = sorted([r for r in records if r.unit_price != 0],
+                                   key=attrgetter('selling_date'))
+            if len(records) != len(valid_records):
+                logger.warning(
+                    f'There are {len(records) - len(valid_records)} records with 0 selling price (per unit). community: "{community}", month: "{month.strftime("%Y-%m")}"')
 
-        # import pdb; pdb.set_trace()
+            if len(valid_records) == 0:
+                continue
 
-    fig.write_html(join(RESULT_DIR, 'result.html'))
+            all_unit_price = [r.unit_price for r in valid_records]
+            avg_unit_price = statistics.mean(all_unit_price)
+            avg_unit_price_by_month[month] = {
+                'avg_price': avg_unit_price,
+                'detail': f'{len(valid_records)} 个成交:<br>' + '<br>'.join([f'[{r.selling_date.strftime("%Y-%m-%d")}] {r.price} = {r.unit_price} &times; {r.area} (平米) [ {r.floor} ] [ {r.window_direction} ] [ {r.floor_plan} ] [ {r.furnish} ]' for r in valid_records])
+            }
+
+        months = list(avg_unit_price_by_month.keys())
+        line = go.Scatter(mode='lines+markers', name=community,
+                          x=months, y=[avg_unit_price_by_month[month]['avg_price']
+                                       for month in months],
+                          customdata=[m.strftime('%Y/%m') for m in months],
+                          hovertemplate='<b>%{customdata}: %{y}</b><br><br>%{text}<extra></extra>',
+                          text=[avg_unit_price_by_month[month]['detail'] for month in months])
+        monthly_price_fig.add_trace(line)
+    monthly_price_fig.write_html(join(RESULT_DIR, 'monthly_price.html'))
+
+
+def plot_all_fig():
+    all_fig = go.Figure()
+    for file_full_name in os.listdir(DATA_DIR):
+        file_full_path = join(DATA_DIR, file_full_name)
+        community = _get_community_from_file_name(file_full_name)
+
+        data_frame = pd.read_csv(file_full_path)
+        line = go.Scatter(x=data_frame['成交日期'], y=data_frame['单价'],
+                          mode='lines+markers', name=community)
+        all_fig.add_trace(line)
+    all_fig.write_html(join(RESULT_DIR, 'all.html'))
 
 
 if __name__ == '__main__':
-    main()
+    plot_monthly_price_fig()
+    plot_all_fig()
