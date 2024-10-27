@@ -118,6 +118,7 @@ def plot_monthly_price_fig():
     min_unit_price = float('inf')
     max_unit_price = float('-inf')
 
+    lines = []
     for file_full_name in os.listdir(DATA_DIR):
         file_full_path = join(DATA_DIR, file_full_name)
         community = _get_community_from_file_name(file_full_name)
@@ -170,7 +171,7 @@ def plot_monthly_price_fig():
                           customdata=[m.strftime('%Y/%m') for m in months],
                           hovertemplate='<b>%{customdata}: %{y} 万/平米</b><br><br>%{text}<extra></extra>',
                           text=[plot_info_my_month[month]['detail'] for month in months])
-        monthly_price_fig.add_trace(line)
+        lines.append(line)
 
     # 给区域染色。
     for fill in _FILLS:
@@ -196,6 +197,9 @@ def plot_monthly_price_fig():
             showlegend=False,
             hoverinfo='none'
         ))
+
+    for line in lines:
+        monthly_price_fig.add_trace(line)
 
     monthly_price_fig.write_html(join(DIST_DIR, 'monthly_price.html'))
 
