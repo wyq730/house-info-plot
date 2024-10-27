@@ -82,13 +82,40 @@ class Record:
 
 _CSV_REST_KEY = '_additional_values'
 _UNIT_PRICE_RANGE_FOR_PLOT = [0, 15]  # Fix this to avoid the dynamic adaptation of y-axis.
+_FILLS = [
+    [datetime(year=2016, month=1, day=1), datetime(year=2017, month=1, day=1)],
+    [datetime(year=2021, month=1, day=1), datetime(year=2022, month=1, day=1)]
+]
 
 
 def plot_monthly_price_fig():
     monthly_price_fig = go.Figure()
+    monthly_price_fig.update_layout(
+        title='小区单价图',
+        xaxis_title='月份',
+        yaxis_title='单价 (万)',
+        plot_bgcolor='rgba(100, 149, 237, 0.1)'
+    )
+    monthly_price_fig.update_xaxes(
+        tickformat="%Y/%m", dtick='M6'
+    )
+    monthly_price_fig.update_yaxes(
+        range=_UNIT_PRICE_RANGE_FOR_PLOT,
+        dtick='0.5'
+    )
 
-    monthly_price_fig.update_yaxes(range=_UNIT_PRICE_RANGE_FOR_PLOT)
-    monthly_price_fig.update_xaxes(dtick='Y1')
+    # Add fills.
+    for fill in _FILLS:
+        monthly_price_fig.add_trace(go.Scatter(
+            x=[fill[0], fill[0], fill[1], fill[1]],
+            y=[_UNIT_PRICE_RANGE_FOR_PLOT[0], _UNIT_PRICE_RANGE_FOR_PLOT[1],
+                _UNIT_PRICE_RANGE_FOR_PLOT[1], _UNIT_PRICE_RANGE_FOR_PLOT[0]],
+            mode='lines',
+            fill='toself',
+            fillcolor='rgba(255, 0, 0, 0.1)',
+            line=dict(color='rgba(255, 255, 255, 0)'),
+            showlegend=False  # 不显示图例
+        ))
 
     for file_full_name in os.listdir(DATA_DIR):
         file_full_path = join(DATA_DIR, file_full_name)
