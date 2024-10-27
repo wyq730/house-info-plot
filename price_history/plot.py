@@ -54,6 +54,10 @@ class Record:
     def selling_month(self) -> datetime:
         return datetime.strptime(self.selling_date.strftime('%Y-%m'), '%Y-%m')
 
+    @property
+    def is_valid(self) -> bool:
+        return self.unit_price != 0
+
     @staticmethod
     def _get_field_from_dict(d: dict, field_name: str, *, allow_empty: bool = False, empty_value=None) -> str:
         if not allow_empty and empty_value is not None:
@@ -86,6 +90,11 @@ _FILLS = [
     [datetime(year=2016, month=1, day=1), datetime(year=2017, month=1, day=1)],
     [datetime(year=2021, month=1, day=1), datetime(year=2022, month=1, day=1)]
 ]
+_HORIZONTAL_MARKS = [
+    (6, 'rgba(0, 128, 0, 0.2)'),
+    (8, 'rgba(218, 165, 32, 0.4)'),
+    (10, 'rgba(255, 0, 0, 0.2)'),
+]
 
 
 def plot_monthly_price_fig():
@@ -93,7 +102,7 @@ def plot_monthly_price_fig():
     monthly_price_fig.update_layout(
         title='小区单价图',
         xaxis_title='月份',
-        yaxis_title='单价 (万)',
+        yaxis_title='单价 (万/平米)',
         plot_bgcolor='rgba(100, 149, 237, 0.1)'
     )
     monthly_price_fig.update_xaxes(
@@ -104,18 +113,10 @@ def plot_monthly_price_fig():
         dtick='0.5'
     )
 
-    # Add fills.
-    for fill in _FILLS:
-        monthly_price_fig.add_trace(go.Scatter(
-            x=[fill[0], fill[0], fill[1], fill[1]],
-            y=[_UNIT_PRICE_RANGE_FOR_PLOT[0], _UNIT_PRICE_RANGE_FOR_PLOT[1],
-                _UNIT_PRICE_RANGE_FOR_PLOT[1], _UNIT_PRICE_RANGE_FOR_PLOT[0]],
-            mode='lines',
-            fill='toself',
-            fillcolor='rgba(255, 0, 0, 0.1)',
-            line=dict(color='rgba(255, 255, 255, 0)'),
-            showlegend=False  # 不显示图例
-        ))
+    min_date = datetime(year=9999, month=1, day=1)  # Serves as infinite.
+    max_date = datetime(year=1, month=1, day=1)  # Serves as negative infinite.
+    min_unit_price = float('inf')
+    max_unit_price = float('-inf')
 
     for file_full_name in os.listdir(DATA_DIR):
         file_full_path = join(DATA_DIR, file_full_name)
@@ -135,35 +136,67 @@ def plot_monthly_price_fig():
                     raise RuntimeError(
                         f'Failed to parse record {record_id} from "{file_full_path}".') from e
 
+                if not record.is_valid:
+                    logger.warning(
+                        f'Found invalid record: record {record_id} from "{file_full_path}".')
+                    continue
+
+                min_date = min(min_date, record.selling_month)
+                max_date = max(max_date, record.selling_month)
+                min_unit_price = min(min_unit_price, record.unit_price)
+                max_unit_price = max(max_unit_price, record.unit_price)
+
                 records_by_month[record.selling_month].append(record)
                 record_id += 1
 
-        avg_unit_price_by_month = {}
+        plot_info_my_month = {}
         for month, records in records_by_month.items():
-            valid_records = sorted([r for r in records if r.unit_price != 0],
-                                   key=attrgetter('selling_date'))
-            if len(records) != len(valid_records):
-                logger.warning(
-                    f'There are {len(records) - len(valid_records)} records with 0 selling price (per unit). community: "{community}", month: "{month.strftime("%Y-%m")}"')
 
-            if len(valid_records) == 0:
-                continue
-
-            all_unit_price = [r.unit_price for r in valid_records]
+            all_unit_price = [r.unit_price for r in records]
             avg_unit_price = statistics.mean(all_unit_price)
-            avg_unit_price_by_month[month] = {
+
+            detail_text = f'{len(records)} 个成交:<br>' + '<br>'.join(
+                [f'[{r.selling_date.strftime("%Y-%m-%d")}] {r.price} = {r.unit_price} &times; {r.area} (平米) [ {r.floor} ] [ {r.window_direction} ] [ {r.floor_plan} ] [ {r.furnish} ]' for r in sorted(records, key=attrgetter('selling_date'))])
+
+            plot_info_my_month[month] = {
                 'avg_price': avg_unit_price,
-                'detail': f'{len(valid_records)} 个成交:<br>' + '<br>'.join([f'[{r.selling_date.strftime("%Y-%m-%d")}] {r.price} = {r.unit_price} &times; {r.area} (平米) [ {r.floor} ] [ {r.window_direction} ] [ {r.floor_plan} ] [ {r.furnish} ]' for r in valid_records])
+                'detail': detail_text
             }
 
-        months = list(avg_unit_price_by_month.keys())
+        months = list(plot_info_my_month.keys())
         line = go.Scatter(mode='lines+markers', name=community,
-                          x=months, y=[avg_unit_price_by_month[month]['avg_price']
+                          x=months, y=[plot_info_my_month[month]['avg_price']
                                        for month in months],
                           customdata=[m.strftime('%Y/%m') for m in months],
-                          hovertemplate='<b>%{customdata}: %{y}</b><br><br>%{text}<extra></extra>',
-                          text=[avg_unit_price_by_month[month]['detail'] for month in months])
+                          hovertemplate='<b>%{customdata}: %{y} 万/平米</b><br><br>%{text}<extra></extra>',
+                          text=[plot_info_my_month[month]['detail'] for month in months])
         monthly_price_fig.add_trace(line)
+
+    # 给区域染色。
+    for fill in _FILLS:
+        monthly_price_fig.add_trace(go.Scatter(
+            x=[fill[0], fill[0], fill[1], fill[1]],
+            y=[_UNIT_PRICE_RANGE_FOR_PLOT[0], _UNIT_PRICE_RANGE_FOR_PLOT[1],
+                _UNIT_PRICE_RANGE_FOR_PLOT[1], _UNIT_PRICE_RANGE_FOR_PLOT[0]],
+            mode='lines',
+            fill='toself',
+            fillcolor='rgba(255, 0, 0, 0.1)',
+            line=dict(color='rgba(255, 255, 255, 0)'),
+            showlegend=False,
+            hoverinfo='none'
+        ))
+
+    # 画横线。
+    for y, color in _HORIZONTAL_MARKS:
+        monthly_price_fig.add_trace(go.Scatter(
+            x=[min_date, max_date],
+            y=[y, y],
+            mode='lines',
+            line=dict(color=color, width=1.2),
+            showlegend=False,
+            hoverinfo='none'
+        ))
+
     monthly_price_fig.write_html(join(DIST_DIR, 'monthly_price.html'))
 
 
