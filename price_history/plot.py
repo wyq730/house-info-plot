@@ -33,8 +33,6 @@ def _get_community_from_file_name(file_full_name: str) -> str:
 
 
 class Record:
-    NOT_AVAILABLE = '_NOT_AVAILABLE'
-
     def __init__(self, csv_row_dict: dict):
         self.link = self._get_field_from_dict(csv_row_dict, '链接')
         self.floor_plan = self._get_field_from_dict(csv_row_dict, '户型')
@@ -83,10 +81,14 @@ class Record:
 
 
 _CSV_REST_KEY = '_additional_values'
+_UNIT_PRICE_RANGE_FOR_PLOT = [0, 15]  # Fix this to avoid the dynamic adaptation of y-axis.
 
 
 def plot_monthly_price_fig():
     monthly_price_fig = go.Figure()
+
+    monthly_price_fig.update_yaxes(range=_UNIT_PRICE_RANGE_FOR_PLOT)
+    monthly_price_fig.update_xaxes(dtick='Y1')
 
     for file_full_name in os.listdir(DATA_DIR):
         file_full_path = join(DATA_DIR, file_full_name)
