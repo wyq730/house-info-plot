@@ -12,7 +12,7 @@ from operator import attrgetter
 
 CURR_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = join(CURR_DIR, 'data')
-RESULT_DIR = join(CURR_DIR, 'result')
+DIST_DIR = join(CURR_DIR, 'dist')
 
 
 def _assert(condition, message=''):
@@ -135,7 +135,7 @@ def plot_monthly_price_fig():
                           hovertemplate='<b>%{customdata}: %{y}</b><br><br>%{text}<extra></extra>',
                           text=[avg_unit_price_by_month[month]['detail'] for month in months])
         monthly_price_fig.add_trace(line)
-    monthly_price_fig.write_html(join(RESULT_DIR, 'monthly_price.html'))
+    monthly_price_fig.write_html(join(DIST_DIR, 'monthly_price.html'))
 
 
 def plot_all_fig():
@@ -148,7 +148,7 @@ def plot_all_fig():
         line = go.Scatter(x=data_frame['成交日期'], y=data_frame['单价'],
                           mode='lines+markers', name=community)
         all_fig.add_trace(line)
-    all_fig.write_html(join(RESULT_DIR, 'all.html'))
+    all_fig.write_html(join(DIST_DIR, 'all.html'))
 
 
 if __name__ == '__main__':
