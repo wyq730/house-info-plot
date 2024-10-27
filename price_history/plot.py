@@ -156,7 +156,7 @@ def plot_monthly_price_fig():
             avg_unit_price = statistics.mean(all_unit_price)
 
             detail_text = f'{len(records)} 个成交:<br>' + '<br>'.join(
-                [f'[{r.selling_date.strftime("%Y-%m-%d")}] {r.price} = {r.unit_price} &times; {r.area} (平米) [ {r.floor} ] [ {r.window_direction} ] [ {r.floor_plan} ] [ {r.furnish} ]' for r in sorted(records, key=attrgetter('selling_date'))])
+                [f'[{r.selling_date.strftime("%Y-%m-%d")}] {r.price} = <b><u>{r.unit_price}</u></b> &times; {r.area} (平米) <i>[ {r.floor} ] [ {r.window_direction} ] [ {r.floor_plan} ] [ {r.furnish} ]</i>' for r in sorted(records, key=attrgetter('selling_date'))])
 
             plot_info_my_month[month] = {
                 'avg_price': avg_unit_price,
