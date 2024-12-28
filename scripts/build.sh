@@ -31,6 +31,3 @@ update_dist() {
 
 check_local_repo_clean
 update_dist
-
-cd ${SCRIPT_DIR}/..
-git subtree push --prefix price_history/dist origin gh-pages
