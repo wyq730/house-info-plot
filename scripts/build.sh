@@ -24,7 +24,8 @@ update_dist() {
     # Commit the current change.
     git add dist/
     git commit -m "${AUTO_COMMIT_MESSAGE}"
-    echo "\033[0;32mUpdated and pushed the dist directory. Commit: $(git rev-parse --short HEAD) ($(git rev-parse HEAD))\033[0m"
+    git push
+    echo "\033[0;32mUpdated the dist directory. Commit: $(git rev-parse --short HEAD) ($(git rev-parse HEAD))\033[0m"
   fi
   cd -
 }
